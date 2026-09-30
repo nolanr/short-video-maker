@@ -5,6 +5,12 @@ import { LandscapeVideo } from "../videos/LandscapeVideo";
 import { TestVideo } from "../videos/Test";
 import z from "zod";
 import { AvailableComponentsEnum } from "../types";
+import { ClipVideo } from "../clips/ClipVideo";
+import {
+  clipVideoSchema,
+  computeTimeline,
+  type ClipVideoProps,
+} from "../clips/schema";
 
 const FPS = 25;
 
@@ -15,6 +21,17 @@ export const calculateMetadata: CalculateMetadataFunction<
   return {
     ...props,
     durationInFrames,
+  };
+};
+
+export const calculateClipMetadata: CalculateMetadataFunction<
+  ClipVideoProps
+> = async ({ props }) => {
+  return {
+    durationInFrames: computeTimeline(props).durationInFrames,
+    fps: props.fps,
+    width: props.width,
+    height: props.height,
   };
 };
 
@@ -275,6 +292,16 @@ export const RemotionRoot: React.FC = () => {
           },
         }}
         calculateMetadata={calculateMetadata}
+      />
+      <Composition
+        id={AvailableComponentsEnum.ClipVideo}
+        component={ClipVideo}
+        durationInFrames={30}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={clipVideoSchema.parse({ segments: [] })}
+        calculateMetadata={calculateClipMetadata}
       />
       <Composition
         id="TestVideo"

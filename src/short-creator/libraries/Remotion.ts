@@ -73,6 +73,34 @@ export class Remotion {
     );
   }
 
+  // Render any registered composition to an explicit output path.
+  async renderComposition(
+    compositionId: string,
+    inputProps: Record<string, unknown>,
+    outputLocation: string,
+  ) {
+    const composition = await selectComposition({
+      serveUrl: this.bundled,
+      id: compositionId,
+      inputProps,
+    });
+
+    await renderMedia({
+      codec: "h264",
+      composition,
+      serveUrl: this.bundled,
+      outputLocation,
+      inputProps,
+      onProgress: ({ progress }) => {
+        logger.debug(
+          `Rendering ${compositionId} ${Math.floor(progress * 100)}% complete`,
+        );
+      },
+      concurrency: this.config.concurrency,
+      offthreadVideoCacheSizeInBytes: this.config.videoCacheSizeInBytes,
+    });
+  }
+
   async testRender(outputLocation: string) {
     const composition = await selectComposition({
       serveUrl: this.bundled,
