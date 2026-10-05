@@ -46,17 +46,21 @@ function resolveAsset(src: string, deps: Deps): string {
 type Caption = { text: string; startMs: number; endMs: number };
 
 // Whisper tags non-speech as "(dramatic music)" / "[BLANK_AUDIO]", split over
-// several tokens; drop everything inside brackets or parentheses.
+// several tokens; drop everything inside brackets or parentheses. It also marks
+// speaker turns with ">>" or a leading "-", which aren't words either.
 function dropNonSpeech(captions: Caption[]): Caption[] {
   let depth = 0;
-  return captions.filter((c) => {
-    const text = c.text.trim();
-    const opens = (text.match(/[([]/g) ?? []).length;
-    const closes = (text.match(/[)\]]/g) ?? []).length;
-    const inside = depth > 0 || opens > 0;
-    depth = Math.max(0, depth + opens - closes);
-    return !inside && text !== "";
-  });
+  return captions
+    .filter((c) => {
+      const text = c.text.trim();
+      const opens = (text.match(/[([]/g) ?? []).length;
+      const closes = (text.match(/[)\]]/g) ?? []).length;
+      const inside = depth > 0 || opens > 0;
+      depth = Math.max(0, depth + opens - closes);
+      return !inside;
+    })
+    .map((c) => ({ ...c, text: c.text.replace(/>>|^\s*-+(?=\s|$)/g, "") }))
+    .filter((c) => c.text.trim() !== "");
 }
 
 function toSegmentMs(
