@@ -74,7 +74,10 @@ export const Captions: React.FC<{
                       style={{
                         color: active ? style.highlightColor : "white",
                         display: "inline-block",
-                        transform: active ? "scale(1.12)" : "none",
+                        // the active word grows from its centre; the margin
+                        // keeps long words from covering the space beside them
+                        margin: "0 0.1em",
+                        transform: active ? "scale(1.08)" : "none",
                       }}
                     >
                       {word.text.trim()}
