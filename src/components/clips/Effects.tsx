@@ -10,6 +10,7 @@ import {
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Bangers";
 
+import { Scoreboard } from "./Scoreboard";
 import { msToFrames, type Overlay, type Vfx } from "./schema";
 
 const { fontFamily } = loadFont();
@@ -122,6 +123,8 @@ export const Overlays: React.FC<{ overlays: Overlay[] }> = ({ overlays }) => {
                 >
                   {overlay.text}
                 </div>
+              ) : overlay.type === "scoreboard" ? (
+                <Scoreboard overlay={overlay} />
               ) : (
                 <Img
                   src={overlay.src}

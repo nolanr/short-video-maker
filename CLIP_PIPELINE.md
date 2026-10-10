@@ -49,7 +49,9 @@ See [`examples/timeline.example.json`](examples/timeline.example.json).
     Transitions overlap the neighbouring segments.
   - `captions`: `false` to skip transcription for this segment.
   - `vfx[]`: `zoom` (`scale`), `shake` (`intensity` px), `flash` (`color`).
-  - `overlays[]`: `text` (`text`, `color`, `fontSize`) or `image` (`src`, `widthPct`), with `position`.
+  - `overlays[]`: `text` (`text`, `color`, `fontSize`), `image` (`src`, `widthPct`) or
+    `scoreboard` (`league`, `status`, `subtitle`, two `teams` with `name`, `score`, `color`,
+    `winner`, `note`), with `position`.
   - `sfx[]`: `src`, `volume`.
   - Effects, overlays and SFX are timed with `atMs` (from segment start) or
     `at` (a timestamp in the source video), plus `durationMs`.

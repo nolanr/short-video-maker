@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   captionStyleSchema,
   layoutSchema,
+  scoreboardFields,
   transitionSchema,
 } from "../components/clips/schema";
 
@@ -50,6 +51,11 @@ const overlayInput = z.discriminatedUnion("type", [
     src: z.string(),
     position: overlayPosition,
     widthPct: z.number().optional(),
+  }),
+  timed.extend({
+    type: z.literal("scoreboard"),
+    position: overlayPosition,
+    ...scoreboardFields,
   }),
 ]);
 

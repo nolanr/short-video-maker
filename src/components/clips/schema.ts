@@ -67,6 +67,27 @@ export type Vfx = z.infer<typeof vfxSchema>;
 
 const overlayPosition = z.enum(["top", "center", "bottom"]).default("top");
 
+// A final score card, drawn in the composition's own style from data.
+export const scoreboardFields = {
+  // e.g. "NCAA WOMEN'S BASKETBALL"
+  league: z.string().optional(),
+  status: z.string().default("FINAL"),
+  // e.g. "FEB 3, 2024 · XFINITY CENTER"
+  subtitle: z.string().optional(),
+  teams: z
+    .array(
+      z.object({
+        name: z.string(),
+        score: z.union([z.number(), z.string()]),
+        color: z.string().default("#444444"),
+        winner: z.boolean().default(false),
+        // e.g. "Caitlin Clark 38 PTS"
+        note: z.string().optional(),
+      }),
+    )
+    .length(2),
+};
+
 export const overlaySchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("text"),
@@ -83,8 +104,15 @@ export const overlaySchema = z.discriminatedUnion("type", [
     position: overlayPosition,
     widthPct: z.number().default(40),
   }),
+  z.object({
+    type: z.literal("scoreboard"),
+    ...timed,
+    position: overlayPosition,
+    ...scoreboardFields,
+  }),
 ]);
 export type Overlay = z.infer<typeof overlaySchema>;
+export type ScoreboardOverlay = Extract<Overlay, { type: "scoreboard" }>;
 
 export const sfxSchema = z.object({
   src: z.string(),
