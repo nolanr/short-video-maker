@@ -5,6 +5,7 @@ import type { z } from "zod";
 
 import {
   clipVideoSchema,
+  layoutSchema,
   type ClipVideoProps,
 } from "../components/clips/schema";
 import type { FFMpeg } from "../short-creator/libraries/FFmpeg";
@@ -116,7 +117,7 @@ async function splitAtPauses(
   trim: PauseTrim,
   fps: number,
   deps: Deps,
-): Promise<PreparedSegment[]> {
+): Promise<Array<{ segment: PreparedSegment; file: string }>> {
   const { vfx = [], overlays = [], sfx = [] } = segment;
   const SFX_MS = 1000;
   const ranges = keepRanges(
@@ -130,9 +131,9 @@ async function splitAtPauses(
     ],
     trim,
   );
-  if (ranges.length === 1) return [segment];
+  if (ranges.length === 1) return [{ segment, file: cutPath }];
 
-  const pieces: PreparedSegment[] = [];
+  const pieces: Array<{ segment: PreparedSegment; file: string }> = [];
   for (const [k, [a, b]] of ranges.entries()) {
     const piecePath = cutPath.replace(/\.mp4$/, `-${a}-${b}.mp4`);
     if (!fs.existsSync(piecePath)) {
@@ -145,23 +146,55 @@ async function splitAtPauses(
         .filter((x) => inside(x.atMs))
         .map((x) => ({ ...x, atMs: x.atMs - a }));
     pieces.push({
-      ...segment,
-      videoUrl: deps.urlFor(piecePath),
-      durationMs: b - a,
-      transitionIn: k === 0 ? segment.transitionIn : undefined,
-      captions: segment.captions
-        .filter((c) => inside(c.startMs))
-        .map((c) => ({
-          ...c,
-          startMs: c.startMs - a,
-          endMs: Math.min(c.endMs, b) - a,
-        })),
-      vfx: rebase(vfx),
-      overlays: rebase(overlays),
-      sfx: rebase(sfx),
+      file: piecePath,
+      segment: {
+        ...segment,
+        videoUrl: deps.urlFor(piecePath),
+        durationMs: b - a,
+        transitionIn: k === 0 ? segment.transitionIn : undefined,
+        captions: segment.captions
+          .filter((c) => inside(c.startMs))
+          .map((c) => ({
+            ...c,
+            startMs: c.startMs - a,
+            endMs: Math.min(c.endMs, b) - a,
+          })),
+        vfx: rebase(vfx),
+        overlays: rebase(overlays),
+        sfx: rebase(sfx),
+      },
     });
   }
   return pieces;
+}
+
+// Swaps the segment's layout for a pre-rendered full-frame video
+async function bake(
+  segment: PreparedSegment,
+  file: string,
+  output: { width: number; height: number },
+  deps: Deps,
+): Promise<PreparedSegment> {
+  const layout = layoutSchema.parse(segment.layout);
+  if (layout.type === "baked") return segment;
+  const bakedPath = file.replace(
+    /\.mp4$/,
+    `-${hash(layout, output.width, output.height)}.mp4`,
+  );
+  if (!fs.existsSync(bakedPath)) {
+    await deps.ffmpeg.bakeLayout(
+      file,
+      layout,
+      bakedPath,
+      output.width,
+      output.height,
+    );
+  }
+  return {
+    ...segment,
+    videoUrl: deps.urlFor(bakedPath),
+    layout: { type: "baked" },
+  };
 }
 
 async function cutSource(
@@ -281,19 +314,18 @@ export async function prepareTimeline(
         atMs: toSegmentMs({ at, atMs }, segment),
       })),
     };
-    if (!trim) {
-      segments.push(prepared);
-      continue;
+    const pieces = trim
+      ? await splitAtPauses(prepared, cutPath, words, trim, fps, deps)
+      : [{ segment: prepared, file: cutPath }];
+    for (const piece of pieces) {
+      segments.push(
+        timeline.output.bakeLayouts
+          ? await bake(piece.segment, piece.file, timeline.output, deps)
+          : piece.segment,
+      );
     }
-    const pieces = await splitAtPauses(
-      prepared,
-      cutPath,
-      words,
-      trim,
-      fps,
-      deps,
-    );
-    const keptMs = pieces.reduce((sum, p) => sum + p.durationMs, 0);
+    if (!trim) continue;
+    const keptMs = pieces.reduce((sum, p) => sum + p.segment.durationMs, 0);
     logger.info(
       {
         segment: i,
@@ -302,7 +334,6 @@ export async function prepareTimeline(
       },
       "Trimmed pauses",
     );
-    segments.push(...pieces);
   }
 
   const props = clipVideoSchema.parse({

@@ -29,6 +29,8 @@ export const layoutSchema = z.discriminatedUnion("type", [
     game: cropRect,
     camHeight: z.number().gt(0).lt(1).default(0.35),
   }),
+  // the video already has the output's size and layout (see FFMpeg.bakeLayout)
+  z.object({ type: z.literal("baked") }),
 ]);
 export type Layout = z.infer<typeof layoutSchema>;
 

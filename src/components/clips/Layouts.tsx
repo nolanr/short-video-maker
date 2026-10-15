@@ -54,6 +54,14 @@ export const SegmentLayout: React.FC<{ src: string; layout: Layout }> = ({
 }) => {
   const { width, height } = useVideoConfig();
 
+  if (layout.type === "baked") {
+    return (
+      <AbsoluteFill>
+        <OffthreadVideo src={src} muted style={{ width, height }} />
+      </AbsoluteFill>
+    );
+  }
+
   if (layout.type === "fill") {
     return (
       <CropBox

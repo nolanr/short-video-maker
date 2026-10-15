@@ -1,6 +1,7 @@
 import ffmpeg from "fluent-ffmpeg";
 import { Readable } from "node:stream";
 import { logger } from "../../logger";
+import type { CropRect, Layout } from "../../components/clips/schema";
 
 export class FFMpeg {
   constructor(private ffmpegPath: string) {}
@@ -128,6 +129,60 @@ export class FFMpeg {
         .audioCodec("aac")
         .audioChannels(2)
         .audioFrequency(48000)
+        .on("end", () => resolve(outputPath))
+        .on("error", reject)
+        .save(outputPath);
+    });
+  }
+
+  // Renders a clip-pipeline layout into a width x height video, so the
+  // composition draws one full-frame video instead of decoding the source
+  // twice per frame (blur background + foreground, or cam + game). Expects
+  // the 1920x1080 output of cutSegment.
+  async bakeLayout(
+    inputPath: string,
+    layout: Exclude<Layout, { type: "baked" }>,
+    outputPath: string,
+    width: number,
+    height: number,
+  ): Promise<string> {
+    const crop = (c: CropRect = { x: 0, y: 0, w: 1, h: 1 }) =>
+      `crop=iw*${c.w}:ih*${c.h}:iw*${c.x}:ih*${c.y}`;
+    // scale to cover w x h, then center-crop to it
+    const cover = (w: number, h: number) =>
+      `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`;
+    const even = (n: number) => Math.round(n / 2) * 2;
+
+    let graph: string;
+    if (layout.type === "fill") {
+      graph = `[0:v]${crop(layout.crop)},${cover(width, height)}[v]`;
+    } else if (layout.type === "blur") {
+      // same look as the Remotion layout: a small blurred, darkened copy scaled up
+      const bgW = even(width / 8);
+      const bgH = even(height / 8);
+      graph =
+        `[0:v]${crop(layout.crop)},split[a][b];` +
+        `[a]${cover(bgW, bgH)},boxblur=4:1,colorchannelmixer=rr=0.6:gg=0.6:bb=0.6,scale=${width}:${height}[bg];` +
+        `[b]scale=${width}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]`;
+    } else {
+      const camH = even(height * layout.camHeight);
+      graph =
+        `[0:v]split[a][b];[a]${crop(layout.cam)},${cover(width, camH)}[c];` +
+        `[b]${crop(layout.game)},${cover(width, height - camH)}[g];[c][g]vstack[v]`;
+    }
+
+    return new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .complexFilter(graph)
+        .outputOptions([
+          "-map [v]",
+          "-map 0:a?",
+          "-c:a copy",
+          "-preset veryfast",
+          "-crf 18",
+          "-pix_fmt yuv420p",
+        ])
+        .videoCodec("libx264")
         .on("end", () => resolve(outputPath))
         .on("error", reject)
         .save(outputPath);

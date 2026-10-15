@@ -59,6 +59,9 @@ See [`examples/timeline.example.json`](examples/timeline.example.json).
   - Effects, overlays and SFX are timed with `atMs` (from segment start) or
     `at` (a timestamp in the source video), plus `durationMs`.
 - `defaults`: `layout`, `transitionIn`, `captions`, `trimPauses`, `volume` applied to every segment.
+- `output`: `fps`, `width`, `height`, and `bakeLayouts` (default `true`): layouts are
+  rendered with ffmpeg during prepare, so Remotion draws one full-frame video per segment
+  instead of decoding the source twice (about 30% faster renders, same look).
 - `captionStyle`: `position`, `highlightColor`, `fontSize`, `uppercase`, `maxCharsPerLine`.
 - `music`: `src`, `volume`, `duckedVolume` (used while someone is talking).
 

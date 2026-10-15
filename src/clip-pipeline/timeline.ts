@@ -127,6 +127,8 @@ export const timelineInput = z.object({
       fps: z.number().default(30),
       width: z.number().default(1080),
       height: z.number().default(1920),
+      // render layouts with ffmpeg before Remotion; much faster, same look
+      bakeLayouts: z.boolean().default(true),
     })
     .default({}),
 });
