@@ -44,7 +44,9 @@ export const Scoreboard: React.FC<{ overlay: ScoreboardOverlay }> = ({
           color: team.winner ? "#111" : "#8a8a8a",
         }}
       >
-        <div style={{ width: 22, alignSelf: "stretch", background: team.color }} />
+        <div
+          style={{ width: 22, alignSelf: "stretch", background: team.color }}
+        />
         <div style={{ flex: 1, padding: "0 28px", minWidth: 0 }}>
           <div
             style={{
@@ -59,7 +61,14 @@ export const Scoreboard: React.FC<{ overlay: ScoreboardOverlay }> = ({
             {team.name}
           </div>
           {team.note ? (
-            <div style={{ fontSize: 34, fontWeight: 600, color: "#666", marginTop: 6 }}>
+            <div
+              style={{
+                fontSize: 34,
+                fontWeight: 600,
+                color: "#666",
+                marginTop: 6,
+              }}
+            >
               {team.note}
             </div>
           ) : null}

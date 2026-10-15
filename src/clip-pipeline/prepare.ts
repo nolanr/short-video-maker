@@ -70,6 +70,34 @@ function dropNonSpeech(captions: Caption[]): Caption[] {
     .filter((c) => c.text.trim() !== "");
 }
 
+// How much of a segment Whisper tagged as music, e.g. "(upbeat music)" or
+// "♪". Background music is the usual copyright strike on clipped streams.
+export function musicMs(captions: Caption[]): number {
+  let total = 0;
+  let open: { startMs: number; text: string } | null = null;
+  for (const c of captions) {
+    const text = c.text.trim();
+    if (text.includes("♪")) total += c.endMs - c.startMs;
+    if (!open && /[([]/.test(text)) open = { startMs: c.startMs, text: "" };
+    if (open) {
+      open.text += text;
+      if (/[)\]]/.test(text)) {
+        if (/music|singing|song/i.test(open.text))
+          total += c.endMs - open.startMs;
+        open = null;
+      }
+    }
+  }
+  return total;
+}
+
+// Slurs and the strongest profanity; first letter kept so captions still read
+const CENSORED =
+  /\b(f+u+c+k\w*|motherf\w*|sh[i1]t(s|ty|ting|ted)?|cunts?|n[i1]gg\w*|f[a4]g(s|gots?|gy)?|retard(s|ed)?|trann(y|ies)|kikes?|sp[i1]cs?|chinks?)\b/gi;
+
+export const censorText = (text: string) =>
+  text.replace(CENSORED, (word) => word[0] + "*".repeat(word.length - 1));
+
 function toSegmentMs(
   item: { at?: number; atMs?: number },
   segment: SegmentInput,
@@ -250,6 +278,12 @@ export async function prepareTimeline(
   );
 
   const segments: z.input<typeof clipVideoSchema>["segments"] = [];
+  // per source segment, for callers (shorts-factory reads it to skip music)
+  const report: Array<{
+    segment: number;
+    durationMs: number;
+    musicMs: number;
+  }> = [];
   for (const [i, segment] of timeline.segments.entries()) {
     const sourceRef = timeline.sources[segment.source];
     if (!sourceRef) {
@@ -283,9 +317,19 @@ export async function prepareTimeline(
         `${path.basename(cutPath, ".mp4")}.wav`,
       );
       await deps.ffmpeg.extractWav(cutPath, wavPath);
-      words = dropNonSpeech(await deps.whisper.CreateCaption(wavPath));
+      const raw = await deps.whisper.CreateCaption(wavPath);
+      report.push({
+        segment: i,
+        durationMs: (segment.end - segment.start) * 1000,
+        musicMs: musicMs(raw),
+      });
+      words = dropNonSpeech(raw);
     }
-    const captions = wantCaptions ? words : [];
+    const captions = !wantCaptions
+      ? []
+      : timeline.captionStyle.censor
+        ? words.map((w) => ({ ...w, text: censorText(w.text) }))
+        : words;
 
     const prepared: PreparedSegment = {
       videoUrl: deps.urlFor(cutPath),
@@ -335,6 +379,12 @@ export async function prepareTimeline(
       "Trimmed pauses",
     );
   }
+
+  fs.writeJsonSync(
+    path.join(deps.workDir, "report.json"),
+    { segments: report },
+    { spaces: 2 },
+  );
 
   const props = clipVideoSchema.parse({
     ...timeline.output,

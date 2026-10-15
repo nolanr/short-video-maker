@@ -1,5 +1,5 @@
 import { test, expect } from "vitest";
-import { keepRanges } from "./prepare";
+import { censorText, keepRanges, musicMs } from "./prepare";
 
 const w = (startMs: number, endMs: number) => ({ text: "x", startMs, endMs });
 const trim = { minGapMs: 1000, padMs: 150 };
@@ -23,4 +23,28 @@ test("keeps a pause that an overlay is showing over", () => {
     [0, 3650],
     [5850, 7000],
   ]);
+});
+
+test("censors slurs and strong profanity but not lookalikes", () => {
+  expect(censorText("what the fuck, that's special spice")).toBe(
+    "what the f***, that's special spice",
+  );
+  expect(censorText("Shit, he said fags")).toBe("S***, he said f***");
+});
+
+test("measures music tagged by Whisper", () => {
+  const c = (text: string, startMs: number, endMs: number) => ({
+    text,
+    startMs,
+    endMs,
+  });
+  expect(
+    musicMs([
+      c(" (", 0, 100),
+      c("upbeat", 100, 200),
+      c(" music)", 200, 3000),
+      c(" hi", 3000, 3500),
+      c(" ♪", 4000, 5000),
+    ]),
+  ).toBe(4000);
 });

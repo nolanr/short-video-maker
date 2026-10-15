@@ -90,6 +90,27 @@ export const scoreboardFields = {
     .length(2),
 };
 
+// A card of labelled numbers: a player's stat line, standings, odds.
+export const statcardFields = {
+  // e.g. "CAITLIN CLARK · IOWA"
+  title: z.string(),
+  // e.g. "VS MARYLAND · FEB 3, 2024"
+  subtitle: z.string().optional(),
+  rows: z
+    .array(
+      z.object({
+        label: z.string(),
+        value: z.union([z.number(), z.string()]),
+        // draws the row in the accent colour
+        highlight: z.boolean().default(false),
+      }),
+    )
+    .min(1)
+    .max(8),
+  accent: z.string().default("#ffd000"),
+  footer: z.string().optional(),
+};
+
 export const overlaySchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("text"),
@@ -112,9 +133,16 @@ export const overlaySchema = z.discriminatedUnion("type", [
     position: overlayPosition,
     ...scoreboardFields,
   }),
+  z.object({
+    type: z.literal("statcard"),
+    ...timed,
+    position: overlayPosition,
+    ...statcardFields,
+  }),
 ]);
 export type Overlay = z.infer<typeof overlaySchema>;
 export type ScoreboardOverlay = Extract<Overlay, { type: "scoreboard" }>;
+export type StatcardOverlay = Extract<Overlay, { type: "statcard" }>;
 
 export const sfxSchema = z.object({
   src: z.string(),
@@ -129,6 +157,8 @@ export const captionStyleSchema = z.object({
   fontSize: z.number().default(90),
   uppercase: z.boolean().default(true),
   maxCharsPerLine: z.number().default(18),
+  // mask slurs and strong profanity in captions (audio is untouched)
+  censor: z.boolean().default(false),
 });
 export type CaptionStyle = z.infer<typeof captionStyleSchema>;
 

@@ -11,6 +11,7 @@ import {
 import { loadFont } from "@remotion/google-fonts/Bangers";
 
 import { Scoreboard } from "./Scoreboard";
+import { Statcard } from "./Statcard";
 import { msToFrames, type Overlay, type Vfx } from "./schema";
 
 const { fontFamily } = loadFont();
@@ -125,6 +126,8 @@ export const Overlays: React.FC<{ overlays: Overlay[] }> = ({ overlays }) => {
                 </div>
               ) : overlay.type === "scoreboard" ? (
                 <Scoreboard overlay={overlay} />
+              ) : overlay.type === "statcard" ? (
+                <Statcard overlay={overlay} />
               ) : (
                 <Img
                   src={overlay.src}

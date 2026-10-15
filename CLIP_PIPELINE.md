@@ -54,7 +54,8 @@ See [`examples/timeline.example.json`](examples/timeline.example.json).
   - `vfx[]`: `zoom` (`scale`), `shake` (`intensity` px), `flash` (`color`).
   - `overlays[]`: `text` (`text`, `color`, `fontSize`), `image` (`src`, `widthPct`) or
     `scoreboard` (`league`, `status`, `subtitle`, two `teams` with `name`, `score`, `color`,
-    `winner`, `note`), with `position`.
+    `winner`, `note`) or `statcard` (`title`, `subtitle`, up to 8 `rows` of `label`, `value`,
+    `highlight`, plus `accent` and `footer`), with `position`.
   - `sfx[]`: `src`, `volume`.
   - Effects, overlays and SFX are timed with `atMs` (from segment start) or
     `at` (a timestamp in the source video), plus `durationMs`.
@@ -62,7 +63,11 @@ See [`examples/timeline.example.json`](examples/timeline.example.json).
 - `output`: `fps`, `width`, `height`, and `bakeLayouts` (default `true`): layouts are
   rendered with ffmpeg during prepare, so Remotion draws one full-frame video per segment
   instead of decoding the source twice (about 30% faster renders, same look).
-- `captionStyle`: `position`, `highlightColor`, `fontSize`, `uppercase`, `maxCharsPerLine`.
+- `captionStyle`: `position`, `highlightColor`, `fontSize`, `uppercase`, `maxCharsPerLine`,
+  `censor` (mask slurs and strong profanity in captions).
+
+Prepare also writes `report.json` to the work dir with each segment's duration and how much
+of it Whisper tagged as music (`musicMs`), since background music gets clips struck.
 - `music`: `src`, `volume`, `duckedVolume` (used while someone is talking).
 
 ## Code
