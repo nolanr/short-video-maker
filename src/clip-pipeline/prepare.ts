@@ -11,7 +11,13 @@ import type { FFMpeg } from "../short-creator/libraries/FFmpeg";
 import type { Whisper } from "../short-creator/libraries/Whisper";
 import { logger } from "../logger";
 import type { Downloader } from "./Downloader";
-import { isUrl, type SegmentInput, type TimelineInput } from "./timeline";
+import {
+  isUrl,
+  resolvePauseTrim,
+  type PauseTrim,
+  type SegmentInput,
+  type TimelineInput,
+} from "./timeline";
 
 type Deps = {
   ffmpeg: FFMpeg;
@@ -71,6 +77,91 @@ function toSegmentMs(
   if (item.at !== undefined)
     return Math.max(0, (item.at - segment.start) * 1000);
   return 0;
+}
+
+type PreparedSegment = z.input<typeof clipVideoSchema>["segments"][number];
+type Range = [number, number];
+
+// [startMs, endMs] parts of a segment to keep: everything except silences of
+// at least minGapMs between words, less padMs on each side. The segment's own
+// start and end stay as authored. A pause that overlaps an effect, overlay or
+// sound is kept, so nothing on screen gets cut short.
+export function keepRanges(
+  words: Caption[],
+  durationMs: number,
+  protectedRanges: Range[],
+  { minGapMs, padMs }: PauseTrim,
+): Range[] {
+  const keep: Range[] = [];
+  let start = 0;
+  for (let i = 1; i < words.length; i++) {
+    if (words[i].startMs - words[i - 1].endMs < minGapMs) continue;
+    const gapStart = words[i - 1].endMs + padMs;
+    const gapEnd = words[i].startMs - padMs;
+    if (protectedRanges.some(([a, b]) => a < gapEnd && b > gapStart)) continue;
+    keep.push([start, gapStart]);
+    start = gapEnd;
+  }
+  keep.push([start, durationMs]);
+  return keep;
+}
+
+// Hard-cuts a prepared segment into its kept ranges. Pieces after the first
+// get no transition, and captions and timed items move to the piece they
+// fall in.
+async function splitAtPauses(
+  segment: PreparedSegment,
+  cutPath: string,
+  words: Caption[],
+  trim: PauseTrim,
+  fps: number,
+  deps: Deps,
+): Promise<PreparedSegment[]> {
+  const { vfx = [], overlays = [], sfx = [] } = segment;
+  const SFX_MS = 1000;
+  const ranges = keepRanges(
+    words,
+    segment.durationMs,
+    [
+      ...[...vfx, ...overlays].map(
+        (x): Range => [x.atMs, x.atMs + x.durationMs],
+      ),
+      ...sfx.map((x): Range => [x.atMs, x.atMs + SFX_MS]),
+    ],
+    trim,
+  );
+  if (ranges.length === 1) return [segment];
+
+  const pieces: PreparedSegment[] = [];
+  for (const [k, [a, b]] of ranges.entries()) {
+    const piecePath = cutPath.replace(/\.mp4$/, `-${a}-${b}.mp4`);
+    if (!fs.existsSync(piecePath)) {
+      await deps.ffmpeg.cutSegment(cutPath, a / 1000, b / 1000, piecePath, fps);
+    }
+    const inside = (ms: number) =>
+      ms >= a && (ms < b || (k === ranges.length - 1 && ms <= b));
+    const rebase = <T extends { atMs: number }>(items: T[]) =>
+      items
+        .filter((x) => inside(x.atMs))
+        .map((x) => ({ ...x, atMs: x.atMs - a }));
+    pieces.push({
+      ...segment,
+      videoUrl: deps.urlFor(piecePath),
+      durationMs: b - a,
+      transitionIn: k === 0 ? segment.transitionIn : undefined,
+      captions: segment.captions
+        .filter((c) => inside(c.startMs))
+        .map((c) => ({
+          ...c,
+          startMs: c.startMs - a,
+          endMs: Math.min(c.endMs, b) - a,
+        })),
+      vfx: rebase(vfx),
+      overlays: rebase(overlays),
+      sfx: rebase(sfx),
+    });
+  }
+  return pieces;
 }
 
 async function cutSource(
@@ -147,18 +238,23 @@ export async function prepareTimeline(
     const cutPath = await cutSource(sourceRef, segment, fps, deps);
 
     const wantCaptions = segment.captions ?? timeline.defaults.captions;
-    let captions: Caption[] = [];
-    if (wantCaptions) {
+    const trim = resolvePauseTrim(
+      segment.trimPauses ?? timeline.defaults.trimPauses,
+    );
+    // pause trimming needs word timings even when captions are off
+    let words: Caption[] = [];
+    if (wantCaptions || trim) {
       const wavPath = path.join(
         deps.workDir,
         "audio",
         `${path.basename(cutPath, ".mp4")}.wav`,
       );
       await deps.ffmpeg.extractWav(cutPath, wavPath);
-      captions = dropNonSpeech(await deps.whisper.CreateCaption(wavPath));
+      words = dropNonSpeech(await deps.whisper.CreateCaption(wavPath));
     }
+    const captions = wantCaptions ? words : [];
 
-    segments.push({
+    const prepared: PreparedSegment = {
       videoUrl: deps.urlFor(cutPath),
       durationMs: (segment.end - segment.start) * 1000,
       volume: segment.volume ?? timeline.defaults.volume,
@@ -184,7 +280,29 @@ export async function prepareTimeline(
         src: resolveAsset(sfx.src, deps),
         atMs: toSegmentMs({ at, atMs }, segment),
       })),
-    });
+    };
+    if (!trim) {
+      segments.push(prepared);
+      continue;
+    }
+    const pieces = await splitAtPauses(
+      prepared,
+      cutPath,
+      words,
+      trim,
+      fps,
+      deps,
+    );
+    const keptMs = pieces.reduce((sum, p) => sum + p.durationMs, 0);
+    logger.info(
+      {
+        segment: i,
+        pieces: pieces.length,
+        cutMs: Math.round(prepared.durationMs - keptMs),
+      },
+      "Trimmed pauses",
+    );
+    segments.push(...pieces);
   }
 
   const props = clipVideoSchema.parse({

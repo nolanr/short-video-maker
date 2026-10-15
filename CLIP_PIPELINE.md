@@ -48,6 +48,9 @@ See [`examples/timeline.example.json`](examples/timeline.example.json).
   - `transitionIn`: `fade` | `slide` | `wipe` | `flip`, `durationMs`, `direction`.
     Transitions overlap the neighbouring segments.
   - `captions`: `false` to skip transcription for this segment.
+  - `trimPauses`: `true`, or `{minGapMs, padMs}` (default 1000 / 150), to jump-cut
+    silences between words. The segment's own start and end are kept, and so is any
+    pause under an effect, overlay or sound.
   - `vfx[]`: `zoom` (`scale`), `shake` (`intensity` px), `flash` (`color`).
   - `overlays[]`: `text` (`text`, `color`, `fontSize`), `image` (`src`, `widthPct`) or
     `scoreboard` (`league`, `status`, `subtitle`, two `teams` with `name`, `score`, `color`,
@@ -55,7 +58,7 @@ See [`examples/timeline.example.json`](examples/timeline.example.json).
   - `sfx[]`: `src`, `volume`.
   - Effects, overlays and SFX are timed with `atMs` (from segment start) or
     `at` (a timestamp in the source video), plus `durationMs`.
-- `defaults`: `layout`, `transitionIn`, `captions`, `volume` applied to every segment.
+- `defaults`: `layout`, `transitionIn`, `captions`, `trimPauses`, `volume` applied to every segment.
 - `captionStyle`: `position`, `highlightColor`, `fontSize`, `uppercase`, `maxCharsPerLine`.
 - `music`: `src`, `volume`, `duckedVolume` (used while someone is talking).
 

@@ -67,6 +67,25 @@ const sfxInput = z.object({
   volume: z.number().min(0).optional(),
 });
 
+// Cut silences longer than minGapMs between words, keeping padMs of air on
+// each side. `true` uses the defaults.
+const pauseTrim = z
+  .object({
+    minGapMs: z.number().positive().default(1000),
+    padMs: z.number().min(0).default(150),
+  })
+  .refine(
+    (t) => t.padMs * 2 < t.minGapMs,
+    "padMs must be under half of minGapMs",
+  );
+const trimPausesInput = z.union([z.boolean(), pauseTrim]);
+export type PauseTrim = z.infer<typeof pauseTrim>;
+
+export const resolvePauseTrim = (
+  value: z.infer<typeof trimPausesInput> | undefined,
+): PauseTrim | undefined =>
+  value === true ? pauseTrim.parse({}) : value || undefined;
+
 export const segmentInput = z.object({
   source: z.string().describe("Key into `sources`"),
   start: timestamp,
@@ -74,6 +93,7 @@ export const segmentInput = z.object({
   layout: layoutSchema.optional(),
   transitionIn: transitionSchema.optional(),
   captions: z.boolean().optional(),
+  trimPauses: trimPausesInput.optional(),
   volume: z.number().min(0).optional(),
   vfx: z.array(vfxInput).default([]),
   overlays: z.array(overlayInput).default([]),
@@ -89,6 +109,7 @@ export const timelineInput = z.object({
       layout: layoutSchema.default({ type: "blur" }),
       transitionIn: transitionSchema.optional(),
       captions: z.boolean().default(true),
+      trimPauses: trimPausesInput.default(false),
       volume: z.number().min(0).default(1),
     })
     .default({}),
