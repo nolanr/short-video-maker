@@ -80,9 +80,7 @@ vi.mock("fluent-ffmpeg", () => {
     pipe: mockPipe,
   }));
 
-  ffmpegMock.setFfmpegPath = vi.fn();
-
-  return { default: ffmpegMock };
+  return { default: Object.assign(ffmpegMock, { setFfmpegPath: vi.fn() }) };
 });
 
 // mock kokoro-js
@@ -161,7 +159,7 @@ test("test me", async () => {
   const remotion = await Remotion.init(config);
 
   // control the render promise resolution
-  let resolveRenderPromise: () => void;
+  let resolveRenderPromise!: () => void;
   const renderPromiseMock: Promise<void> = new Promise((resolve) => {
     resolveRenderPromise = resolve;
   });

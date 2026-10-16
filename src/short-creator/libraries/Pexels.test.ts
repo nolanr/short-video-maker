@@ -2,10 +2,13 @@ process.env.LOG_LEVEL = "debug";
 
 import nock from "nock";
 import { PexelsAPI } from "./Pexels";
-import { test, assert, expect } from "vitest";
+import { test, assert, expect, beforeEach } from "vitest";
 import fs from "fs-extra";
 import path from "path";
 import { OrientationEnum } from "../../types/shorts";
+
+// a test's unused interceptors would otherwise answer the next test's requests
+beforeEach(() => nock.cleanAll());
 
 test("test pexels", async () => {
   const mockResponse = fs.readFileSync(
@@ -27,7 +30,7 @@ test("should time out", async () => {
     .delay(1000)
     .times(30)
     .reply(200, {});
-  expect(async () => {
+  await expect(async () => {
     const pexels = new PexelsAPI("asdf");
     await pexels.findVideo(["dog"], 2.4, [], OrientationEnum.portrait, 100);
   }).rejects.toThrow(
@@ -52,7 +55,14 @@ test("should retry 3 times", async () => {
     .reply(200, mockResponse);
 
   const pexels = new PexelsAPI("asdf");
-  const video = await pexels.findVideo(["dog"], 2.4, []);
+  // shorter than the 1 s delay, so the first two attempts time out
+  const video = await pexels.findVideo(
+    ["dog"],
+    2.4,
+    [],
+    OrientationEnum.portrait,
+    500,
+  );
   console.log(video);
   assert.isObject(video, "Video should be an object");
 });

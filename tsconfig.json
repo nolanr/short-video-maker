@@ -12,6 +12,7 @@
     "declaration": true,
     "jsx": "react-jsx"
   },
+  "include": ["src"],
   "exclude": [
     "remotion.config.ts",
     "node_modules",
